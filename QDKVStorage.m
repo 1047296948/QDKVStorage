@@ -25,6 +25,7 @@ static NSString *const kQDDBWalFileName = @"kvstorage.sqlite-wal";
    create table if not exists kvstorage (
      key                 text,
      data                blob,
+     size                integer,
      modification_time   integer,
      primary key(key)
    );
@@ -140,7 +141,7 @@ static UIApplication *_QDSharedApplication() {
 }
 
 - (BOOL)_dbInitialize {
-    NSString *sql = @"pragma journal_mode = wal; pragma synchronous = normal; create table if not exists kvstorage (key text, data blob, modification_time integer, primary key(key));create index if not exists modification_time_idx on kvstorage(modification_time);";
+    NSString *sql = @"pragma journal_mode = wal; pragma synchronous = normal; create table if not exists kvstorage (key text, data blob, size integer, modification_time integer, primary key(key));create index if not exists modification_time_idx on kvstorage(modification_time);";
     return [self _dbExecute:sql];
 }
 
@@ -199,14 +200,15 @@ static UIApplication *_QDSharedApplication() {
 }
 
 - (BOOL)_dbSaveWithKey:(NSString *)key data:(NSData *)data {
-    NSString *sql = @"insert or replace into kvstorage (key, data, modification_time) values (?1, ?2, ?3);";
+    NSString *sql = @"insert or replace into kvstorage (key, data, size, modification_time) values (?1, ?2, ?3, ?4);";
     sqlite3_stmt *stmt = [self _dbPrepareStmt:sql];
     if (!stmt) return NO;
     
     int timestamp = (int)time(NULL);
     sqlite3_bind_text(stmt, 1, key.UTF8String, -1, NULL);
     sqlite3_bind_blob(stmt, 2, data.bytes, (int)data.length, 0);
-    sqlite3_bind_int(stmt, 3, timestamp);
+    sqlite3_bind_int(stmt, 3, (int)data.length);
+    sqlite3_bind_int(stmt, 4, timestamp);
     
     int result = sqlite3_step(stmt);
     if (result != SQLITE_DONE) {
@@ -379,6 +381,18 @@ static UIApplication *_QDSharedApplication() {
     return NO;
 }
 
+- (int)_dbGetTotalSize {
+    NSString *sql = @"select sum(size) from kvstorage;";
+    sqlite3_stmt *stmt = [self _dbPrepareStmt:sql];
+    if (!stmt) return -1;
+    int result = sqlite3_step(stmt);
+    if (result != SQLITE_ROW) {
+        if (_errorLogsEnabled) NSLog(@"%s line:%d sqlite query error (%d): %s", __FUNCTION__, __LINE__, result, sqlite3_errmsg(_db));
+        return -1;
+    }
+    return sqlite3_column_int(stmt, 0);
+}
+
 #pragma mark - private
 
 /**
@@ -531,6 +545,13 @@ static UIApplication *_QDSharedApplication() {
 - (NSInteger)getAllValuesCount {
     Lock();
     int ret = [self _dbGetAllDataCount];
+    Unlock();
+    return (NSInteger)ret;
+}
+
+- (NSInteger)getValuesTotalSize {
+    Lock();
+    long long ret = [self _dbGetTotalSize];
     Unlock();
     return (NSInteger)ret;
 }

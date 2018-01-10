@@ -30,4 +30,6 @@
 
 - (NSInteger)getAllValuesCount;
 
+- (NSInteger)getValuesTotalSize;
+
 @end
