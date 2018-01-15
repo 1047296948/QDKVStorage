@@ -280,7 +280,7 @@ static UIApplication *_QDSharedApplication() {
 
 - (NSMutableArray *)_dbGetDataWithKeys:(NSArray *)keys {
     if (![self _dbCheck]) return nil;
-    NSString *sql = [NSString stringWithFormat:@"select data from kvstorage where key in (%@) order by modification_time desc", [self _dbJoinedKeys:keys]];
+    NSString *sql = [NSString stringWithFormat:@"select data from kvstorage where key in (%@) order by modification_time desc;", [self _dbJoinedKeys:keys]];
     
     sqlite3_stmt *stmt = NULL;
     int result = sqlite3_prepare_v2(_db, sql.UTF8String, -1, &stmt, NULL);
@@ -310,18 +310,12 @@ static UIApplication *_QDSharedApplication() {
 
 - (NSMutableArray *)_dbGetAllData {
     if (![self _dbCheck]) return nil;
-    NSString *sql = @"select data from kvstorage order by modification_time desc";
+    NSString *sql = @"select data from kvstorage order by modification_time desc;";
     sqlite3_stmt *stmt = [self _dbPrepareStmt:sql];
     if (!stmt) return nil;
-    int result = sqlite3_step(stmt);
-    if (result != SQLITE_OK) {
-        if (_errorLogsEnabled) NSLog(@"%s line:%d sqlite stmt prepare error (%d): %s", __FUNCTION__, __LINE__, result, sqlite3_errmsg(_db));
-        return nil;
-    }
-    
     NSMutableArray *datas = [NSMutableArray new];
     do {
-        result = sqlite3_step(stmt);
+        int result = sqlite3_step(stmt);
         if (result == SQLITE_ROW) {
             NSData *data = [self _dbGetDataFromStmt:stmt];
             if (data) [datas addObject:data];
@@ -333,7 +327,6 @@ static UIApplication *_QDSharedApplication() {
             break;
         }
     } while (1);
-    sqlite3_finalize(stmt);
     return datas;
 }
 
